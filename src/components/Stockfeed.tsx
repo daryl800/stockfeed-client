@@ -28,7 +28,6 @@ export default function Stockfeed() {
   });
 
   const [isDarkMode, setIsDarkMode] = useState(false);
-
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode);
   }, [isDarkMode]);
@@ -175,33 +174,41 @@ export default function Stockfeed() {
             .map(([symbol, msgs]) =>
               msgs.map((msg, idx) => {
                 const isRecent = Date.now() - msg._updated < 60 * 1000;
-                const lastClosePercent = msg.pct_vs_last_close;
-                const isPositive = lastClosePercent > 0;
-                const isNegative = lastClosePercent < 0;
                 const percentChange = msg.pct_vs_day_open;
+                const lastClosePercent = msg.pct_vs_last_close;
                 const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground";
                 const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground";
+
+                // Determine highlight background and text
+                let bgClass = "";
+                let textHighlightClass = "";
+
+                if (isRecent) {
+                  if (lastClosePercent > 0) bgClass = "bg-green-100";
+                  else if (lastClosePercent < 0) bgClass = "bg-pink-100";
+
+                  // For both light & dark mode: symbol/time/open/current text black
+                  textHighlightClass = "text-black";
+                }
 
                 return (
                   <Card
                     key={`${symbol}-${idx}`}
-                    className={`shadow-card border-border/50 backdrop-blur transition-smooth hover:border-primary/50 ${isRecent
-                      ? isPositive
-                        ? 'border-success/50 bg-success/5 animate-fade-in text-gray-900 dark:text-inherit'
-                        : isNegative
-                          ? 'border-destructive/50 bg-destructive/5 animate-fade-in text-gray-900 dark:text-inherit'
-                          : ''
-                      : ''
-                      }`}
+                    className={`shadow-card border-border/50 backdrop-blur transition-smooth hover:border-primary/50 ${bgClass} animate-fade-in`}
                   >
                     <div className="grid grid-cols-7 gap-1 px-2 py-1 items-center text-xs sm:text-sm"
                       style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
-                      <div className="flex items-center">
-                        <Badge variant="outline" className="font-mono font-bold text-xs sm:text-sm border-primary/50 text-inherit dark:text-inherit">{msg.symbol}</Badge>
+                      <div className={`flex items-center ${textHighlightClass}`}>
+                        <Badge
+                          variant="outline"
+                          className={`font-mono font-bold text-xs sm:text-sm border-primary/50 ${textHighlightClass}`}
+                        >
+                          {msg.symbol}
+                        </Badge>
                       </div>
-                      <div className="text-center font-mono text-inherit">{formatTime(msg.time)}</div>
-                      <div className="text-center font-mono">{msg.day_open.toFixed(3)}</div>
-                      <div className="text-center font-mono font-bold">{msg.price.toFixed(3)}</div>
+                      <div className={`text-center font-mono ${textHighlightClass}`}>{formatTime(msg.time)}</div>
+                      <div className={`text-center font-mono ${textHighlightClass}`}>{msg.day_open.toFixed(3)}</div>
+                      <div className={`text-center font-mono font-bold ${textHighlightClass}`}>{msg.price.toFixed(3)}</div>
                       <div className={`text-center font-mono font-bold ${percentClass}`}>{percentChange > 0 && "+"}{percentChange.toFixed(5)}%</div>
                       <div className="flex justify-center">{msg.direction === "🟢" ? <TrendingUp className="h-4 w-4 text-success" /> : <TrendingDown className="h-4 w-4 text-destructive" />}</div>
                       <div className={`text-center font-mono font-bold ${lastCloseClass}`}>{lastClosePercent > 0 && "+"}{lastClosePercent.toFixed(5)}%</div>
