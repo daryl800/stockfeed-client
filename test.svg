@@ -1,0 +1,24 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bluePurpleGradient1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5663f6"/>
+      <stop offset="100%" stop-color="#704afb"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" fill="#f8faff"/>
+  
+  <!-- Axis -->
+  <polyline fill="none" stroke="url(#bluePurpleGradient1)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" points="20,110 20,20 110,20"/>
+  
+  <!-- Red bars -->
+  <rect x="30" y="90" width="15" height="20" fill="url(#bluePurpleGradient1)"/>
+  <rect x="55" y="70" width="15" height="40" fill="url(#bluePurpleGradient1)"/>
+  <rect x="80" y="50" width="15" height="60" fill="url(#bluePurpleGradient1)"/>
+  
+  <!-- Upward trend line -->
+  <polyline fill="none" stroke="url(#bluePurpleGradient1)" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" points="22,102 40,85 60,100 80,65 105,50"/>
+  <polygon fill="url(#bluePurpleGradient1)" points="105,50 114,45 109,60"/>
+  
+  <!-- Dollar sign -->
+  <text x="96" y="85" font-size="40" font-weight="bold" fill="url(#bluePurpleGradient1)" font-family="Arial" alignment-baseline="middle" text-anchor="middle">$</text>
+</svg>
