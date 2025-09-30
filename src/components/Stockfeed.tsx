@@ -131,7 +131,7 @@ export default function Stockfeed() {
             <h1 className="text-3xl sm:text-5xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-pulse-glow">
               STOCKFEED
             </h1>
-            <p className="mt-1 flex items-center gap-2 text-inherit">
+            <p className={`mt-1 flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
               <span className="text-sm sm:text-lg">{today}</span>
               <span className="text-primary font-mono text-sm sm:text-xl">{currentTime}</span>
             </p>
@@ -175,8 +175,10 @@ export default function Stockfeed() {
             .map(([symbol, msgs]) =>
               msgs.map((msg, idx) => {
                 const isRecent = Date.now() - msg._updated < 60 * 1000;
-                const percentChange = msg.pct_vs_day_open;
                 const lastClosePercent = msg.pct_vs_last_close;
+                const isPositive = lastClosePercent > 0;
+                const isNegative = lastClosePercent < 0;
+                const percentChange = msg.pct_vs_day_open;
                 const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground";
                 const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground";
 
@@ -184,9 +186,11 @@ export default function Stockfeed() {
                   <Card
                     key={`${symbol}-${idx}`}
                     className={`shadow-card border-border/50 backdrop-blur transition-smooth hover:border-primary/50 ${isRecent
-                      ? (percentChange > 0
+                      ? isPositive
                         ? 'border-success/50 bg-success/5 animate-fade-in text-gray-900 dark:text-inherit'
-                        : 'border-destructive/50 bg-destructive/5 animate-fade-in text-gray-900 dark:text-inherit')
+                        : isNegative
+                          ? 'border-destructive/50 bg-destructive/5 animate-fade-in text-gray-900 dark:text-inherit'
+                          : ''
                       : ''
                       }`}
                   >
