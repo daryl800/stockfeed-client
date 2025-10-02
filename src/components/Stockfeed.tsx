@@ -11,6 +11,8 @@ export default function Stockfeed() {
   });
 
   const [, tick] = useState(0);
+  const [sortColumn, setSortColumn] = useState<'vsOpen' | 'trend' | 'vsClose'>('vsOpen');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const wsRef = useRef<WebSocket | null>(null);
   const connectedRef = useRef(false);
   const MAX_ENTRIES = 200;
@@ -110,6 +112,22 @@ export default function Stockfeed() {
     return acc;
   }, {});
 
+  const handleSort = (column: 'vsOpen' | 'trend' | 'vsClose') => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const getSortValue = (msgs: any[], column: 'vsOpen' | 'trend' | 'vsClose') => {
+    if (column === 'trend') return msgs.filter(m => m.direction === "🟢").length;
+    if (column === 'vsOpen') return Math.max(...msgs.map(m => m.pct_vs_day_open));
+    if (column === 'vsClose') return Math.max(...msgs.map(m => m.pct_vs_last_close));
+    return 0;
+  };
+
   const clearMessages = () => {
     setMessages([]);
     localStorage.removeItem("stockfeed_messages");
@@ -161,18 +179,37 @@ export default function Stockfeed() {
             <div className="text-center">Time</div>
             <div className="text-center">Day Open</div>
             <div className="text-center">Current</div>
-            <div className="text-center">vs Open</div>
-            <div className="text-center">Trend</div>
-            <div className="text-center">vs Last</div>
+            <button
+              onClick={() => handleSort('vsOpen')}
+              className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsOpen' ? 'text-primary font-bold' : ''}`}
+            >
+              vs Open {sortColumn === 'vsOpen' && (sortDirection === 'desc' ? '↓' : '↑')}
+            </button>
+            <button
+              onClick={() => handleSort('trend')}
+              className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'trend' ? 'text-primary font-bold' : ''}`}
+            >
+              Trend {sortColumn === 'trend' && (sortDirection === 'desc' ? '↓' : '↑')}
+            </button>
+            <button
+              onClick={() => handleSort('vsClose')}
+              className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsClose' ? 'text-primary font-bold' : ''}`}
+            >
+              vs Last {sortColumn === 'vsClose' && (sortDirection === 'desc' ? '↓' : '↑')}
+            </button>
           </div>
         </Card>
 
         {/* Stock Rows */}
         <div className="space-y-1">
           {Object.entries(grouped)
-            .sort((a, b) => Math.max(...b[1].map(m => m.pct_vs_day_open)) - Math.max(...a[1].map(m => m.pct_vs_day_open)))
-            .map(([symbol, msgs]) =>
-              msgs.map((msg, idx) => {
+            .sort((a, b) => {
+              const aValue = getSortValue(a[1] as any[], sortColumn);
+              const bValue = getSortValue(b[1] as any[], sortColumn);
+              return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
+            })
+            .map(([symbol, msgs]: [string, any]) =>
+              (msgs as any[]).map((msg, idx) => {
                 const isRecent = Date.now() - msg._updated < 60 * 1000;
                 const percentChange = msg.pct_vs_day_open;
                 const lastClosePercent = msg.pct_vs_last_close;
@@ -208,7 +245,16 @@ export default function Stockfeed() {
                       </div>
                       <div className={`text-center font-mono ${textHighlightClass}`}>{formatTime(msg.time)}</div>
                       <div className={`text-center font-mono ${textHighlightClass}`}>{msg.day_open.toFixed(3)}</div>
-                      <div className={`text-center font-mono font-bold ${textHighlightClass}`}>{msg.price.toFixed(3)}</div>
+                      <div
+                        className={`text-center font-mono font-bold ${msg.price > msg.day_open
+                          ? "text-success"
+                          : msg.price < msg.day_open
+                            ? "text-destructive"
+                            : ""
+                          } ${textHighlightClass}`}
+                      >
+                        {msg.price.toFixed(3)}
+                      </div>
                       <div className={`text-center font-mono font-bold ${percentClass}`}>{percentChange > 0 && "+"}{percentChange.toFixed(5)}%</div>
                       <div className="flex justify-center">{msg.direction === "🟢" ? <TrendingUp className="h-4 w-4 text-success" /> : <TrendingDown className="h-4 w-4 text-destructive" />}</div>
                       <div className={`text-center font-mono font-bold ${lastCloseClass}`}>{lastClosePercent > 0 && "+"}{lastClosePercent.toFixed(5)}%</div>
