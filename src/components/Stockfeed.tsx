@@ -15,6 +15,7 @@ export default function Stockfeed() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [filterSymbols, setFilterSymbols] = useState<string[]>([]); // State for filtered symbols
   const [dropdownVisible, setDropdownVisible] = useState(false); // State for dropdown visibility
+  const [rowsPerSection, setRowsPerSection] = useState(10); // State for number of rows per section
   const dropdownRef = useRef(null); // Reference to the dropdown element
   const wsRef = useRef<WebSocket | null>(null);
   const connectedRef = useRef(false);
@@ -111,7 +112,7 @@ export default function Stockfeed() {
 
   const grouped = messages.reduce((acc: any, msg: any) => {
     if (!acc[msg.symbol]) acc[msg.symbol] = [];
-    if (acc[msg.symbol].length < 5) acc[msg.symbol].push(msg);
+    if (acc[msg.symbol].length < 10) acc[msg.symbol].push(msg);
     return acc;
   }, {});
 
@@ -124,10 +125,7 @@ export default function Stockfeed() {
     }
   };
 
-
   const getSortValue = (msgs: any[], column: 'vsOpen' | 'trend' | 'vsClose') => {
-    const topMsg = msgs[0];  // The first message in the group (top row)
-
     if (column === 'trend') {
       const trendCount = msgs.reduce(
         (acc, m) => {
@@ -137,13 +135,12 @@ export default function Stockfeed() {
         },
         { up: 0, down: 0 }
       );
-      return trendCount.up - trendCount.down;  // Compare the "up" vs "down" for sorting
+      return trendCount.up - trendCount.down; // Compare the "up" vs "down" for sorting
     }
-    if (column === 'vsOpen') return topMsg.pct_vs_day_open;  // Use top message's vsOpen value
-    if (column === 'vsClose') return topMsg.pct_vs_last_close;  // Use top message's vsClose value
+    if (column === 'vsOpen') return Math.max(...msgs.map(m => m.pct_vs_day_open));
+    if (column === 'vsClose') return Math.max(...msgs.map(m => m.pct_vs_last_close));
     return 0;
   };
-
 
   const clearMessages = () => {
     setMessages([]);
@@ -187,6 +184,11 @@ export default function Stockfeed() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Handle the change in rows per section
+  const handleRowsPerSectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setRowsPerSection(Number(event.target.value)); // Update the number of rows per section
+  };
 
   return (
     <div className="min-h-screen p-4 sm:p-6 bg-white dark:bg-black transition-colors duration-300">
@@ -243,10 +245,25 @@ export default function Stockfeed() {
                 </div>
               </div>
             )}
-
           </div>
+
           <Button onClick={selectAllSymbols} variant="outline" className="text-sm">Select All</Button>
           <Button onClick={deselectAllSymbols} variant="outline" className="text-sm">Deselect All</Button>
+
+          {/* No. of rows */}
+          <div className="flex items-center text-black dark:text-white">
+            <span className="mr-2">No. of rows</span>
+            <select
+              id="rowsPerSection"
+              value={rowsPerSection}
+              onChange={handleRowsPerSectionChange}
+              className="ml-2 p-2 border rounded-md text-black"
+            >
+              {[...Array(10).keys()].map((i) => (
+                <option key={i + 1} value={i + 1}>{i + 1}</option>  // 1 to 10 rows
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Grid Header */}
@@ -288,14 +305,13 @@ export default function Stockfeed() {
               return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
             })
             .map(([symbol, msgs]: [string, any]) =>
-              (msgs as any[]).map((msg, idx) => {
+              (msgs as any[]).slice(0, rowsPerSection).map((msg, idx) => { // Limit the rows based on rowsPerSection
                 const isRecent = Date.now() - msg._updated < 60 * 1000;
                 const percentChange = msg.pct_vs_day_open;
                 const lastClosePercent = msg.pct_vs_last_close;
                 const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground";
                 const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground";
 
-                // Determine highlight background and text
                 let bgClass = "";
                 let textHighlightClass = "";
 
@@ -303,7 +319,6 @@ export default function Stockfeed() {
                   if (lastClosePercent > 0) bgClass = "bg-green-100";
                   else if (lastClosePercent < 0) bgClass = "bg-pink-100";
 
-                  // For both light & dark mode: symbol/time/open/current text black
                   textHighlightClass = "text-black";
                 }
 
