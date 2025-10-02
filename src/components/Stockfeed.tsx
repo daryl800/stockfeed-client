@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { TrendingUp, TrendingDown, Volume2, VolumeX, Sun, Moon } from "lucide-react";
+import { TrendingUp, TrendingDown, Volume2, VolumeX, Sun, Moon, Filter } from "lucide-react"; // Add Filter Icon
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,9 @@ export default function Stockfeed() {
   const [, tick] = useState(0);
   const [sortColumn, setSortColumn] = useState<'vsOpen' | 'trend' | 'vsClose'>('vsOpen');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [filterSymbols, setFilterSymbols] = useState<string[]>([]); // State for filtered symbols
+  const [dropdownVisible, setDropdownVisible] = useState(false); // State for dropdown visibility
+  const dropdownRef = useRef(null); // Reference to the dropdown element
   const wsRef = useRef<WebSocket | null>(null);
   const connectedRef = useRef(false);
   const MAX_ENTRIES = 200;
@@ -121,12 +124,26 @@ export default function Stockfeed() {
     }
   };
 
+
   const getSortValue = (msgs: any[], column: 'vsOpen' | 'trend' | 'vsClose') => {
-    if (column === 'trend') return msgs.filter(m => m.direction === "🟢").length;
-    if (column === 'vsOpen') return Math.max(...msgs.map(m => m.pct_vs_day_open));
-    if (column === 'vsClose') return Math.max(...msgs.map(m => m.pct_vs_last_close));
+    const topMsg = msgs[0];  // The first message in the group (top row)
+
+    if (column === 'trend') {
+      const trendCount = msgs.reduce(
+        (acc, m) => {
+          if (m.direction === "🟢") acc.up++;
+          if (m.direction === "🔴") acc.down++;
+          return acc;
+        },
+        { up: 0, down: 0 }
+      );
+      return trendCount.up - trendCount.down;  // Compare the "up" vs "down" for sorting
+    }
+    if (column === 'vsOpen') return topMsg.pct_vs_day_open;  // Use top message's vsOpen value
+    if (column === 'vsClose') return topMsg.pct_vs_last_close;  // Use top message's vsClose value
     return 0;
   };
+
 
   const clearMessages = () => {
     setMessages([]);
@@ -138,6 +155,38 @@ export default function Stockfeed() {
     dongSound.play().then(() => { dongSound.pause(); dongSound.currentTime = 0; }).catch(() => { });
     setSoundsEnabled(true);
   };
+
+  const toggleSymbolSelection = (symbol: string) => {
+    setFilterSymbols(prevSymbols => {
+      if (prevSymbols.includes(symbol)) {
+        return prevSymbols.filter(s => s !== symbol); // Deselect symbol
+      } else {
+        return [...prevSymbols, symbol]; // Select symbol
+      }
+    });
+  };
+
+  const selectAllSymbols = () => {
+    setFilterSymbols(Object.keys(grouped)); // Select all symbols
+  };
+
+  const deselectAllSymbols = () => {
+    setFilterSymbols([]); // Deselect all symbols
+  };
+
+  // Handle clicks outside the dropdown to close it
+  const handleClickOutside = (event: MouseEvent) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      setDropdownVisible(false);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen p-4 sm:p-6 bg-white dark:bg-black transition-colors duration-300">
@@ -169,6 +218,35 @@ export default function Stockfeed() {
               {isDarkMode ? "Light Mode" : "Dark Mode"}
             </Button>
           </div>
+        </div>
+
+        {/* Filter Section */}
+        <div className="flex gap-2 mb-4 items-center">
+          <div className="relative" ref={dropdownRef}>
+            <Button onClick={() => setDropdownVisible(!dropdownVisible)} className="flex items-center gap-2" variant="outline">
+              <Filter className="h-4 w-4" /> Filter Symbols
+            </Button>
+            {dropdownVisible && (
+              <div className="absolute z-10 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-2 w-48 max-h-56 overflow-y-auto text-black dark:text-white">
+                <div className="flex flex-col gap-2">
+                  {Object.keys(grouped).map((symbol) => (
+                    <label key={symbol} className="flex items-center text-black dark:text-white">
+                      <input
+                        type="checkbox"
+                        checked={filterSymbols.includes(symbol)}
+                        onChange={() => toggleSymbolSelection(symbol)}
+                        className="mr-2"
+                      />
+                      {symbol}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+          <Button onClick={selectAllSymbols} variant="outline" className="text-sm">Select All</Button>
+          <Button onClick={deselectAllSymbols} variant="outline" className="text-sm">Deselect All</Button>
         </div>
 
         {/* Grid Header */}
@@ -203,6 +281,7 @@ export default function Stockfeed() {
         {/* Stock Rows */}
         <div className="space-y-1">
           {Object.entries(grouped)
+            .filter(([symbol]) => filterSymbols.length === 0 || filterSymbols.includes(symbol)) // Filter based on selected symbols
             .sort((a, b) => {
               const aValue = getSortValue(a[1] as any[], sortColumn);
               const bValue = getSortValue(b[1] as any[], sortColumn);
