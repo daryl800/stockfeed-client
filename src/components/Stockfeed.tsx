@@ -11,12 +11,12 @@ export default function Stockfeed() {
   });
 
   const [, tick] = useState(0);
-  const [sortColumn, setSortColumn] = useState<'vsOpen' | 'trend' | 'vsClose'>('vsOpen');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc'); // default high -> low
-  const [filterSymbols, setFilterSymbols] = useState<string[]>([]); // empty = show all
+  const [sortColumn, setSortColumn] = useState<'vsOpen' | 'trend' | 'vsClose' | 'stars'>('vsOpen');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [filterSymbols, setFilterSymbols] = useState<string[]>([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [rowsPerSection, setRowsPerSection] = useState<number>(10); // default rows per section
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const [rowsPerSection, setRowsPerSection] = useState(5);
+  const dropdownRef = useRef(null);
   const wsRef = useRef<WebSocket | null>(null);
   const connectedRef = useRef(false);
   const MAX_ENTRIES = 200;
@@ -110,45 +110,19 @@ export default function Stockfeed() {
     return () => clearInterval(interval);
   }, []);
 
-  // Group messages by symbol (newest first, up to 10 kept per group)
   const grouped = messages.reduce((acc: any, msg: any) => {
     if (!acc[msg.symbol]) acc[msg.symbol] = [];
-    if (acc[msg.symbol].length < 10) acc[msg.symbol].push(msg);
+    acc[msg.symbol].push(msg);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {});
 
-  // Clicking column toggles direction if same column, else set to desc by default
-  const handleSort = (column: 'vsOpen' | 'trend' | 'vsClose') => {
+  const handleSort = (column: 'vsOpen' | 'trend' | 'vsClose' | 'stars') => {
     if (sortColumn === column) {
-      setSortDirection(sd => sd === 'asc' ? 'desc' : 'asc');
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(column);
       setSortDirection('desc');
     }
-  };
-
-  // NEW: compute sort value per session (group) using top rowsPerSection rows
-  const getSortValue = (msgs: any[], column: 'vsOpen' | 'trend' | 'vsClose') => {
-    if (!msgs || msgs.length === 0) return 0;
-    // Use the top N rows (msgs assumed newest-first)
-    const slice = msgs.slice(0, rowsPerSection);
-
-    if (column === 'trend') {
-      // sum of positive trends (count of '🟢' in top N)
-      return slice.reduce((acc, m) => acc + (m.direction === "🟢" ? 1 : 0), 0);
-    }
-
-    if (column === 'vsOpen') {
-      // sum of pct_vs_day_open (coerce to number)
-      return slice.reduce((acc, m) => acc + (parseFloat(m.pct_vs_day_open) || 0), 0);
-    }
-
-    if (column === 'vsClose') {
-      // sum of pct_vs_last_close (coerce to number)
-      return slice.reduce((acc, m) => acc + (parseFloat(m.pct_vs_last_close) || 0), 0);
-    }
-
-    return 0;
   };
 
   const clearMessages = () => {
@@ -163,48 +137,46 @@ export default function Stockfeed() {
   };
 
   const toggleSymbolSelection = (symbol: string) => {
-    setFilterSymbols(prevSymbols => {
-      if (prevSymbols.includes(symbol)) {
-        return prevSymbols.filter(s => s !== symbol);
-      } else {
-        return [...prevSymbols, symbol];
-      }
-    });
+    setFilterSymbols(prev => prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol]);
   };
+  const selectAllSymbols = () => setFilterSymbols(Object.keys(grouped));
+  const deselectAllSymbols = () => setFilterSymbols([]);
 
-  const selectAllSymbols = () => {
-    setFilterSymbols(Object.keys(grouped));
-  };
-
-  const deselectAllSymbols = () => {
-    setFilterSymbols([]);
-  };
-
-  // Close dropdown when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
     if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
       setDropdownVisible(false);
     }
   };
-
   useEffect(() => {
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleRowsPerSectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setRowsPerSection(Number(event.target.value));
   };
 
-  // Prepare array of groups to render: apply filter, then sort by session using getSortValue
-  const groupedEntries = Object.entries(grouped)
+  // Sorting logic including stars
+  const sortedSymbols = Object.entries(grouped)
     .filter(([symbol]) => filterSymbols.length === 0 || filterSymbols.includes(symbol))
     .sort((a, b) => {
-      const aVal = getSortValue(a[1], sortColumn);
-      const bVal = getSortValue(b[1], sortColumn);
-      return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
+      const rowsA = a[1].slice(0, rowsPerSection);
+      const rowsB = b[1].slice(0, rowsPerSection);
+
+      const starCount = (msgs: any[]) => msgs.filter(m => m.pct_vs_day_open > 0 && m.pct_vs_last_close > 0).length;
+
+      if (sortColumn === 'stars') {
+        return sortDirection === 'desc' ? starCount(rowsB) - starCount(rowsA) : starCount(rowsA) - starCount(rowsB);
+      }
+
+      const getSortValue = (msgs: any[]) => {
+        if (sortColumn === 'vsOpen') return msgs.reduce((sum, m) => sum + m.pct_vs_day_open, 0);
+        if (sortColumn === 'trend') return msgs.filter(m => m.direction === "🟢").length;
+        if (sortColumn === 'vsClose') return msgs.reduce((sum, m) => sum + m.pct_vs_last_close, 0);
+        return 0;
+      };
+
+      return sortDirection === 'desc' ? getSortValue(rowsB) - getSortValue(rowsA) : getSortValue(rowsA) - getSortValue(rowsB);
     });
 
   return (
@@ -221,10 +193,8 @@ export default function Stockfeed() {
               <span className="text-primary font-mono text-sm sm:text-xl">{currentTime}</span>
             </p>
           </div>
-
           <div className="flex flex-wrap gap-2">
             <Button onClick={clearMessages} variant="secondary" className="transition-smooth hover:shadow-glow">Clear All</Button>
-
             {!soundsEnabled ? (
               <Button onClick={handleEnableSounds} className="gradient-primary transition-smooth hover:shadow-glow">
                 <VolumeX className="mr-2 h-4 w-4" /> Enable Sounds
@@ -234,7 +204,6 @@ export default function Stockfeed() {
                 <Volume2 className="mr-2 h-4 w-4" /> Disable Sounds
               </Button>
             )}
-
             <Button onClick={() => setIsDarkMode(!isDarkMode)} variant="outline" className="flex items-center gap-1">
               {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               {isDarkMode ? "Light Mode" : "Dark Mode"}
@@ -242,73 +211,60 @@ export default function Stockfeed() {
           </div>
         </div>
 
-        {/* Filter Section */}
+        {/* Filter & Rows */}
         <div className="flex gap-2 mb-4 items-center">
           <div className="relative" ref={dropdownRef}>
             <Button onClick={() => setDropdownVisible(!dropdownVisible)} className="flex items-center gap-2" variant="outline">
               <Filter className="h-4 w-4" /> Filter Symbols
             </Button>
-
             {dropdownVisible && (
-              <div className="absolute z-20 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-2 w-48 max-h-56 overflow-y-auto text-black dark:text-white">
-                <div className="flex flex-col gap-2">
-                  {Object.keys(grouped).map((symbol) => (
-                    <label key={symbol} className="flex items-center text-black dark:text-white">
-                      <input
-                        type="checkbox"
-                        checked={filterSymbols.includes(symbol)}
-                        onChange={() => toggleSymbolSelection(symbol)}
-                        className="mr-2"
-                      />
-                      {symbol}
-                    </label>
-                  ))}
-                </div>
+              <div className="absolute z-10 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-2 w-48 max-h-56 overflow-y-auto text-black dark:text-white">
+                {Object.keys(grouped).map(symbol => (
+                  <label key={symbol} className="flex items-center text-black dark:text-white">
+                    <input type="checkbox" checked={filterSymbols.includes(symbol)} onChange={() => toggleSymbolSelection(symbol)} className="mr-2" />
+                    {symbol}
+                  </label>
+                ))}
               </div>
             )}
           </div>
-
           <Button onClick={selectAllSymbols} variant="outline" className="text-sm">Select All</Button>
           <Button onClick={deselectAllSymbols} variant="outline" className="text-sm">Deselect All</Button>
-
           <div className="flex items-center text-black dark:text-white">
             <span className="mr-2">No. of rows</span>
-            <select
-              id="rowsPerSection"
-              value={rowsPerSection}
-              onChange={handleRowsPerSectionChange}
-              className="ml-2 p-2 border rounded-md text-black dark:text-white"
-            >
-              {[...Array(10).keys()].map((i) => (
-                <option key={i + 1} value={i + 1}>{i + 1}</option>
-              ))}
+            <select value={rowsPerSection} onChange={handleRowsPerSectionChange} className="ml-2 p-2 border rounded-md text-black">
+              {[...Array(10).keys()].map(i => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
             </select>
           </div>
         </div>
 
         {/* Grid Header */}
         <Card className="mb-2 shadow-card border-border/50 backdrop-blur">
-          <div className="grid grid-cols-7 gap-1 px-2 py-2 text-xs sm:text-sm font-semibold text-muted-foreground"
-            style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+          <div className="grid grid-cols-8 gap-1 px-2 py-2 text-xs sm:text-sm font-semibold text-muted-foreground"
+            style={{ gridTemplateColumns: '40px repeat(7, minmax(0, 1fr))' }}>
+            <button
+              onClick={() => handleSort('stars')}
+              className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'stars' ? 'text-primary font-bold' : ''}`}
+            >
+              ⭐
+              {sortColumn === 'stars' && (sortDirection === 'desc' ? '↓' : '↑')}
+            </button>
             <div>Symbol</div>
             <div className="text-center">Time</div>
             <div className="text-center">Day Open</div>
             <div className="text-center">Current</div>
-
             <button
               onClick={() => handleSort('vsOpen')}
               className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsOpen' ? 'text-primary font-bold' : ''}`}
             >
               vs Open {sortColumn === 'vsOpen' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
-
             <button
               onClick={() => handleSort('trend')}
               className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'trend' ? 'text-primary font-bold' : ''}`}
             >
               Trend {sortColumn === 'trend' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
-
             <button
               onClick={() => handleSort('vsClose')}
               className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsClose' ? 'text-primary font-bold' : ''}`}
@@ -318,62 +274,52 @@ export default function Stockfeed() {
           </div>
         </Card>
 
+
         {/* Stock Rows */}
-        <div className="space-y-1">
-          {groupedEntries.map(([symbol, msgs]: [string, any[]]) =>
-            // show top rowsPerSection rows for each section
-            msgs.slice(0, rowsPerSection).map((msg, idx) => {
-              const isRecent = Date.now() - msg._updated < 60 * 1000;
-              const percentChange = msg.pct_vs_day_open;
-              const lastClosePercent = msg.pct_vs_last_close;
-              const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground";
-              const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground";
+        <div className="space-y-4">
+          {sortedSymbols.map(([symbol, msgs], sectionIdx) => {
+            const bgSection = sectionIdx % 2 === 0 ? "bg-gray-50 dark:bg-gray-900" : "bg-white dark:bg-black";
+            return (
+              <div key={symbol} className={`${bgSection} p-1 rounded-md border border-gray-300 dark:border-gray-700`}>
+                {msgs.slice(0, rowsPerSection).map((msg, idx) => {
+                  const isRecent = Date.now() - msg._updated < 60 * 1000;
+                  const percentChange = msg.pct_vs_day_open;
+                  const lastClosePercent = msg.pct_vs_last_close;
+                  const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground";
+                  const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground";
 
-              let bgClass = "";
-              let textHighlightClass = "";
+                  let bgClass = "";
+                  let textHighlightClass = "";
 
-              if (isRecent) {
-                if (lastClosePercent > 0) bgClass = "bg-green-100";
-                else if (lastClosePercent < 0) bgClass = "bg-pink-100";
+                  if (isRecent) {
+                    if (lastClosePercent > 0) bgClass = "bg-green-100";
+                    else if (lastClosePercent < 0) bgClass = "bg-pink-100";
+                    textHighlightClass = "text-black";
+                  }
 
-                textHighlightClass = "text-black";
-              }
-
-              return (
-                <Card
-                  key={`${symbol}-${idx}`}
-                  className={`shadow-card border-border/50 backdrop-blur transition-smooth hover:border-primary/50 ${bgClass} animate-fade-in`}
-                >
-                  <div className="grid grid-cols-7 gap-1 px-2 py-1 items-center text-xs sm:text-sm"
-                    style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
-                    <div className={`flex items-center ${textHighlightClass}`}>
-                      <Badge
-                        variant="outline"
-                        className={`font-mono font-bold text-xs sm:text-sm border-primary/50 ${textHighlightClass}`}
-                      >
-                        {msg.symbol}
-                      </Badge>
-                    </div>
-                    <div className={`text-center font-mono ${textHighlightClass}`}>{formatTime(msg.time)}</div>
-                    <div className={`text-center font-mono ${textHighlightClass}`}>{msg.day_open.toFixed(3)}</div>
-                    <div
-                      className={`text-center font-mono font-bold ${msg.price > msg.day_open
-                        ? "text-success"
-                        : msg.price < msg.day_open
-                          ? "text-destructive"
-                          : ""
-                        } ${textHighlightClass}`}
-                    >
-                      {msg.price.toFixed(3)}
-                    </div>
-                    <div className={`text-center font-mono font-bold ${percentClass}`}>{percentChange > 0 && "+"}{percentChange.toFixed(5)}%</div>
-                    <div className="flex justify-center">{msg.direction === "🟢" ? <TrendingUp className="h-4 w-4 text-success" /> : <TrendingDown className="h-4 w-4 text-destructive" />}</div>
-                    <div className={`text-center font-mono font-bold ${lastCloseClass}`}>{lastClosePercent > 0 && "+"}{lastClosePercent.toFixed(5)}%</div>
-                  </div>
-                </Card>
-              );
-            })
-          )}
+                  return (
+                    <Card key={`${symbol}-${idx}`} className={`shadow-card border-border/50 backdrop-blur transition-smooth hover:border-primary/50 ${bgClass} animate-fade-in`}>
+                      <div className="grid grid-cols-8 gap-1 px-2 py-1 items-center text-xs sm:text-sm"
+                        style={{ gridTemplateColumns: '40px repeat(7, minmax(0, 1fr))' }}>
+                        <div className="flex justify-center">{(msg.pct_vs_day_open > 0 && msg.pct_vs_last_close > 0) ? "⭐" : ""}</div>
+                        <div className={`flex items-center ${textHighlightClass}`}>
+                          <Badge variant="outline" className={`font-mono font-bold text-xs sm:text-sm border-primary/50 ${textHighlightClass}`}>
+                            {msg.symbol}
+                          </Badge>
+                        </div>
+                        <div className={`text-center font-mono ${textHighlightClass}`}>{formatTime(msg.time)}</div>
+                        <div className={`text-center font-mono ${textHighlightClass}`}>{msg.day_open.toFixed(3)}</div>
+                        <div className={`text-center font-mono font-bold ${msg.price > msg.day_open ? "text-success" : msg.price < msg.day_open ? "text-destructive" : ""} ${textHighlightClass}`}>{msg.price.toFixed(3)}</div>
+                        <div className={`text-center font-mono font-bold ${percentClass}`}>{percentChange > 0 && "+"}{percentChange.toFixed(5)}%</div>
+                        <div className="flex justify-center">{msg.direction === "🟢" ? <TrendingUp className="h-4 w-4 text-success" /> : <TrendingDown className="h-4 w-4 text-destructive" />}</div>
+                        <div className={`text-center font-mono font-bold ${lastCloseClass}`}>{lastClosePercent > 0 && "+"}{lastClosePercent.toFixed(5)}%</div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {messages.length === 0 && (
