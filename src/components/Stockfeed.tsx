@@ -11,11 +11,11 @@ export default function Stockfeed() {
   });
 
   const [, tick] = useState(0);
-  const [sortColumn, setSortColumn] = useState<'vsOpen' | 'trend' | 'vsClose' | 'stars'>('vsOpen');
+  const [sortColumn, setSortColumn] = useState<'stars' | 'vsOpen' | 'trend' | 'vsClose'>('vsOpen');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [filterSymbols, setFilterSymbols] = useState<string[]>([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [rowsPerSection, setRowsPerSection] = useState(5);
+  const [rowsPerSection, setRowsPerSection] = useState(5); // default rows per section
   const dropdownRef = useRef(null);
   const wsRef = useRef<WebSocket | null>(null);
   const connectedRef = useRef(false);
@@ -116,13 +116,31 @@ export default function Stockfeed() {
     return acc;
   }, {});
 
-  const handleSort = (column: 'vsOpen' | 'trend' | 'vsClose' | 'stars') => {
+  const handleSort = (column: 'stars' | 'vsOpen' | 'trend' | 'vsClose') => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(column);
       setSortDirection('desc');
     }
+  };
+
+  const calculateStars = (msg: any) => {
+    let stars = 0;
+    if (msg.pct_vs_day_open > 0 && msg.pct_vs_last_close > 0) stars = 1;
+    if (stars === 1 && msg.pct_vs_day_open > 3) stars = 2;
+    if (stars === 1 && msg.pct_vs_day_open > 5) stars = 3;
+    if (stars === 2 && msg.pct_vs_day_open > 5) stars = 3;
+    return stars;
+  };
+
+  const getSortValue = (msgs: any[], column: 'stars' | 'vsOpen' | 'trend' | 'vsClose') => {
+    const rows = msgs.slice(0, rowsPerSection);
+    if (column === 'vsOpen') return rows.reduce((sum, m) => sum + m.pct_vs_day_open, 0);
+    if (column === 'trend') return rows.filter(m => m.direction === "🟢").length;
+    if (column === 'vsClose') return rows.reduce((sum, m) => sum + m.pct_vs_last_close, 0);
+    if (column === 'stars') return rows.reduce((sum, m) => sum + calculateStars(m), 0);
+    return 0;
   };
 
   const clearMessages = () => {
@@ -156,27 +174,12 @@ export default function Stockfeed() {
     setRowsPerSection(Number(event.target.value));
   };
 
-  // Sorting logic including stars
   const sortedSymbols = Object.entries(grouped)
     .filter(([symbol]) => filterSymbols.length === 0 || filterSymbols.includes(symbol))
     .sort((a, b) => {
-      const rowsA = a[1].slice(0, rowsPerSection);
-      const rowsB = b[1].slice(0, rowsPerSection);
-
-      const starCount = (msgs: any[]) => msgs.filter(m => m.pct_vs_day_open > 0 && m.pct_vs_last_close > 0).length;
-
-      if (sortColumn === 'stars') {
-        return sortDirection === 'desc' ? starCount(rowsB) - starCount(rowsA) : starCount(rowsA) - starCount(rowsB);
-      }
-
-      const getSortValue = (msgs: any[]) => {
-        if (sortColumn === 'vsOpen') return msgs.reduce((sum, m) => sum + m.pct_vs_day_open, 0);
-        if (sortColumn === 'trend') return msgs.filter(m => m.direction === "🟢").length;
-        if (sortColumn === 'vsClose') return msgs.reduce((sum, m) => sum + m.pct_vs_last_close, 0);
-        return 0;
-      };
-
-      return sortDirection === 'desc' ? getSortValue(rowsB) - getSortValue(rowsA) : getSortValue(rowsA) - getSortValue(rowsB);
+      const aValue = getSortValue(a[1], sortColumn);
+      const bValue = getSortValue(b[1], sortColumn);
+      return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
     });
 
   return (
@@ -241,14 +244,16 @@ export default function Stockfeed() {
         {/* Grid Header */}
         <Card className="mb-2 shadow-card border-border/50 backdrop-blur">
           <div className="grid grid-cols-8 gap-1 px-2 py-2 text-xs sm:text-sm font-semibold text-muted-foreground"
-            style={{ gridTemplateColumns: '40px repeat(7, minmax(0, 1fr))' }}>
+            style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
+
+            {/* Star column with sorting */}
             <button
               onClick={() => handleSort('stars')}
               className={`text-center hover:text-primary transition-colors cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'stars' ? 'text-primary font-bold' : ''}`}
             >
-              ⭐
-              {sortColumn === 'stars' && (sortDirection === 'desc' ? '↓' : '↑')}
+              ⭐ {sortColumn === 'stars' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
+
             <div>Symbol</div>
             <div className="text-center">Time</div>
             <div className="text-center">Day Open</div>
@@ -274,14 +279,13 @@ export default function Stockfeed() {
           </div>
         </Card>
 
-
         {/* Stock Rows */}
-        <div className="space-y-4">
+        <div className="space-y-2">
           {sortedSymbols.map(([symbol, msgs], sectionIdx) => {
             const bgSection = sectionIdx % 2 === 0 ? "bg-gray-50 dark:bg-gray-900" : "bg-white dark:bg-black";
             return (
-              <div key={symbol} className={`${bgSection} p-1 rounded-md border border-gray-300 dark:border-gray-700`}>
-                {msgs.slice(0, rowsPerSection).map((msg, idx) => {
+              <div key={symbol} className={`${bgSection} p-1 rounded-md border border-gray-300 dark:border-gray-600`}>
+                {(msgs as any[]).slice(0, rowsPerSection).map((msg, idx) => {
                   const isRecent = Date.now() - msg._updated < 60 * 1000;
                   const percentChange = msg.pct_vs_day_open;
                   const lastClosePercent = msg.pct_vs_last_close;
@@ -297,16 +301,23 @@ export default function Stockfeed() {
                     textHighlightClass = "text-black";
                   }
 
+                  const stars = calculateStars(msg);
+                  const starStr = "⭐".repeat(stars);
+
                   return (
                     <Card key={`${symbol}-${idx}`} className={`shadow-card border-border/50 backdrop-blur transition-smooth hover:border-primary/50 ${bgClass} animate-fade-in`}>
                       <div className="grid grid-cols-8 gap-1 px-2 py-1 items-center text-xs sm:text-sm"
-                        style={{ gridTemplateColumns: '40px repeat(7, minmax(0, 1fr))' }}>
-                        <div className="flex justify-center">{(msg.pct_vs_day_open > 0 && msg.pct_vs_last_close > 0) ? "⭐" : ""}</div>
-                        <div className={`flex items-center ${textHighlightClass}`}>
+                        style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
+                        {/* Star Column */}
+                        <div className="flex justify-center">{starStr}</div>
+
+                        {/* Symbol Column */}
+                        <div className={`flex items-center`}>
                           <Badge variant="outline" className={`font-mono font-bold text-xs sm:text-sm border-primary/50 ${textHighlightClass}`}>
                             {msg.symbol}
                           </Badge>
                         </div>
+
                         <div className={`text-center font-mono ${textHighlightClass}`}>{formatTime(msg.time)}</div>
                         <div className={`text-center font-mono ${textHighlightClass}`}>{msg.day_open.toFixed(3)}</div>
                         <div className={`text-center font-mono font-bold ${msg.price > msg.day_open ? "text-success" : msg.price < msg.day_open ? "text-destructive" : ""} ${textHighlightClass}`}>{msg.price.toFixed(3)}</div>
