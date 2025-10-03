@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from "react";
 import { TrendingUp, TrendingDown, Volume2, VolumeX, Sun, Moon, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 export default function Stockfeed() {
   const [messages, setMessages] = useState(() => {
@@ -210,12 +209,11 @@ export default function Stockfeed() {
                 variant="outline"
                 size="lg"
                 className={`border-destructive text-destructive transition-smooth 
-    hover:bg-destructive/10 
-    ${isDarkMode ? "hover:text-white" : "hover:text-black"}`}
+                hover:bg-destructive/10 
+                ${isDarkMode ? "hover:text-white" : "hover:text-black"}`}
               >
                 <Volume2 className="mr-2 h-4 w-4" /> Disable Sounds
               </Button>
-
             )}
             <Button onClick={() => setIsDarkMode(!isDarkMode)} variant="outline" size="lg" className="transition-smooth hover:shadow-glow">
               {isDarkMode ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
@@ -253,8 +251,8 @@ export default function Stockfeed() {
             <select
               value={rowsPerSection}
               onChange={handleRowsPerSectionChange}
-              className={`p-2 px-3 border border-border rounded-lg bg-card text-foreground font-medium focus:ring-2 focus:ring-primary focus:border-primary transition-all ${isDarkMode ? "text-white" : "text-black"
-                }`}            >
+              className={`p-2 px-3 border border-border rounded-lg bg-card text-foreground font-medium focus:ring-2 focus:ring-primary focus:border-primary transition-all ${isDarkMode ? "text-white" : "text-black"}`}
+            >
               {[...Array(10).keys()].map(i => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
             </select>
           </div>
@@ -312,17 +310,12 @@ export default function Stockfeed() {
                     ) : (
                       <TrendingDown className="h-5 w-5 text-destructive drop-shadow-glow" />
                     );
-                    let bgClass = "";
-                    let borderClass = "border-border/30";
 
+                    // ✅ Highlight recent changes
+                    let bgClass = "";
                     if (isRecent) {
-                      if (lastClosePercent > 0) {
-                        bgClass = "bg-success/10 dark:bg-success/5";
-                        borderClass = "border-success/50";
-                      } else if (lastClosePercent < 0) {
-                        bgClass = "bg-destructive/10 dark:bg-destructive/5";
-                        borderClass = "border-destructive/50";
-                      }
+                      if (lastClosePercent > 0) bgClass = "bg-success/10 dark:bg-success/5";
+                      else if (lastClosePercent < 0) bgClass = "bg-destructive/10 dark:bg-destructive/5";
                     }
 
                     const stars = calculateStars(msg);
@@ -331,24 +324,47 @@ export default function Stockfeed() {
                     return (
                       <Card
                         key={`${symbol}-${idx}`}
-                        className={`shadow-sm border border-border/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow ${isDarkMode ? "dark:bg-gradient-to-br from-[#0b1e3b]/80 to-[#13294f]/80 text-white" : "bg-white text-black"}`}
+                        className={`shadow-sm border border-border/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow
+    ${bgClass} 
+    ${!bgClass && isDarkMode ? "dark:bg-gradient-to-br from-[#0b1e3b]/80 to-[#13294f]/80 text-white" : ""}
+    ${!bgClass && !isDarkMode ? "bg-white text-black" : ""}`}
                       >
                         <div className="grid grid-cols-8 gap-2 px-2 py-1 items-center text-xs sm:text-sm"
                           style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
                           <div className="flex justify-center text-lg">{starStr}</div>
-                          <div className="flex items-center font-mono font-bold">{msg.symbol ?? "-"}</div>
-                          <div className="text-center font-mono">{formatTime(msg.time ?? "")}</div>
-                          <div className="text-center font-mono font-semibold">{msg.day_open?.toFixed(3) ?? "-"}</div>
-                          <div className={`text-center font-mono font-bold text-base ${msg.price != null ? (msg.price > msg.day_open ? "text-success" : msg.price < msg.day_open ? "text-destructive" : "") : ""}`}>
+                          <div className={`flex items-center font-mono font-bold ${!isDarkMode && isRecent ? "text-black" : ""
+                            }`}>
+                            {msg.symbol ?? "-"}
+                          </div>
+                          <div className={`text-center font-mono ${!isDarkMode && isRecent ? "text-black" : ""
+                            }`}>
+                            {formatTime(msg.time ?? "")}
+                          </div>
+
+                          <div className={`text-center font-mono font-semibold ${!isDarkMode && isRecent ? "text-black" : ""
+                            }`}>
+                            {msg.day_open?.toFixed(3) ?? "-"}
+                          </div>
+
+                          <div className={`text-center font-mono font-bold ${msg.price != null
+                            ? msg.price > msg.day_open
+                              ? "text-success"
+                              : msg.price < msg.day_open
+                                ? "text-destructive"
+                                : ""
+                            : ""
+                            }`}>
                             {msg.price?.toFixed(3) ?? "-"}
                           </div>
                           <div className={`text-center font-semibold ${percentClass}`}>{percentChange != null ? percentChange.toFixed(2) + "%" : "-"}</div>
-                          <div className="flex justify-center items-center">
-                            {trendArrow}
-                          </div>
+                          <div className="flex justify-center items-center">{trendArrow}</div>
                           <div className={`text-center font-semibold ${lastCloseClass}`}>{lastClosePercent != null ? lastClosePercent.toFixed(2) + "%" : "-"}</div>
                         </div>
                       </Card>
+
+
+
+
 
                     );
                   })}
