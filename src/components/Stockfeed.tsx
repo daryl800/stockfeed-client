@@ -136,9 +136,9 @@ export default function Stockfeed() {
 
   const getSortValue = (msgs: any[], column: 'stars' | 'vsOpen' | 'trend' | 'vsClose') => {
     const rows = msgs.slice(0, rowsPerSection);
-    if (column === 'vsOpen') return rows.reduce((sum, m) => sum + m.pct_vs_day_open, 0);
+    if (column === 'vsOpen') return rows.reduce((sum, m) => sum + (m.pct_vs_day_open || 0), 0);
     if (column === 'trend') return rows.filter(m => m.direction === "🟢").length;
-    if (column === 'vsClose') return rows.reduce((sum, m) => sum + m.pct_vs_last_close, 0);
+    if (column === 'vsClose') return rows.reduce((sum, m) => sum + (m.pct_vs_last_close || 0), 0);
     if (column === 'stars') return rows.reduce((sum, m) => sum + calculateStars(m), 0);
     return 0;
   };
@@ -183,15 +183,15 @@ export default function Stockfeed() {
     });
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-background via-background to-accent/5 transition-colors duration-300">
+    <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-white via-white to-accent/5 dark:from-background dark:via-background dark:to-accent/5 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 p-6 bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 shadow-card">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 p-6 bg-white dark:bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 shadow-card">
           <div>
             <h1 className="text-4xl sm:text-6xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-pulse-glow mb-2">
               STOCKFEED
             </h1>
-            <p className="flex items-center gap-3 text-muted-foreground">
+            <p className="flex items-center gap-3 text-muted-foreground dark:text-white">
               <span className="text-base sm:text-lg font-medium">{today}</span>
               <span className="text-primary font-mono text-lg sm:text-2xl font-semibold tracking-wider">{currentTime}</span>
             </p>
@@ -205,7 +205,13 @@ export default function Stockfeed() {
                 <VolumeX className="mr-2 h-4 w-4" /> Enable Sounds
               </Button>
             ) : (
-              <Button onClick={() => setSoundsEnabled(false)} variant="outline" size="lg" className="border-destructive text-destructive hover:bg-destructive/10 transition-smooth">
+              <Button
+                onClick={() => setSoundsEnabled(false)}
+                variant="outline"
+                size="lg"
+                className={`border-destructive text-destructive hover:text-black hover:bg-destructive/10 transition-smooth ${!isDarkMode ? "hover:text-black" : ""
+                  }`}
+              >
                 <Volume2 className="mr-2 h-4 w-4" /> Disable Sounds
               </Button>
             )}
@@ -217,13 +223,13 @@ export default function Stockfeed() {
         </div>
 
         {/* Filter & Rows */}
-        <div className="flex flex-wrap gap-3 mb-6 items-center p-4 bg-card/30 backdrop-blur-sm rounded-xl border border-border/50">
+        <div className="flex flex-wrap gap-3 mb-6 items-center p-4 bg-white dark:bg-card/30 backdrop-blur-sm rounded-xl border border-border/50">
           <div className="relative" ref={dropdownRef}>
             <Button onClick={() => setDropdownVisible(!dropdownVisible)} size="lg" className="flex items-center gap-2" variant="outline">
               <Filter className="h-4 w-4" /> Filter Symbols
             </Button>
             {dropdownVisible && (
-              <div className="absolute z-50 right-0 mt-2 bg-card border border-border rounded-lg p-3 w-52 max-h-64 overflow-y-auto shadow-glow">
+              <div className="absolute z-50 right-0 mt-2 bg-white dark:bg-card border border-border rounded-lg p-3 w-52 max-h-64 overflow-y-auto shadow-glow">
                 {Object.keys(grouped).map(symbol => (
                   <label key={symbol} className="flex items-center hover:bg-accent/20 p-2 rounded cursor-pointer transition-colors">
                     <input
@@ -232,7 +238,7 @@ export default function Stockfeed() {
                       onChange={() => toggleSymbolSelection(symbol)}
                       className="mr-3 h-4 w-4 rounded border-border accent-primary"
                     />
-                    <span className="font-mono font-semibold">{symbol}</span>
+                    <span className="font-mono font-semibold dark:text-white">{symbol}</span>
                   </label>
                 ))}
               </div>
@@ -241,20 +247,20 @@ export default function Stockfeed() {
           <Button onClick={selectAllSymbols} variant="outline" size="lg">Select All</Button>
           <Button onClick={deselectAllSymbols} variant="outline" size="lg">Deselect All</Button>
           <div className="flex items-center gap-3 ml-auto">
-            <span className="text-sm font-medium text-muted-foreground">Rows per symbol:</span>
+            <span className="text-sm font-medium text-black dark:text-white">Rows per symbol:</span>
             <select
               value={rowsPerSection}
               onChange={handleRowsPerSectionChange}
-              className="p-2 px-3 border border-border rounded-lg bg-card text-foreground font-medium focus:ring-2 focus:ring-primary focus:border-primary transition-all"
-            >
+              className={`p-2 px-3 border border-border rounded-lg bg-card text-foreground font-medium focus:ring-2 focus:ring-primary focus:border-primary transition-all ${isDarkMode ? "text-white" : "text-black"
+                }`}            >
               {[...Array(10).keys()].map(i => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
             </select>
           </div>
         </div>
 
         {/* Grid Header */}
-        <Card className="mb-4 shadow-glow border-border/50 backdrop-blur-sm bg-gradient-to-r from-card/80 to-accent/10">
-          <div className="grid grid-cols-8 gap-2 px-4 py-4 text-xs sm:text-sm font-bold uppercase tracking-wide text-muted-foreground"
+        <Card className="mb-4 shadow-glow border-border/50 backdrop-blur-sm bg-white dark:bg-gradient-to-r from-card/80 to-accent/30">
+          <div className="grid grid-cols-8 gap-2 px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wide text-muted-foreground dark:text-white"
             style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
             <button
               onClick={() => handleSort('stars')}
@@ -288,18 +294,22 @@ export default function Stockfeed() {
         </Card>
 
         {/* Stock Rows */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           {sortedSymbols.map(([symbol, msgs], sectionIdx) => {
             return (
-              <div key={symbol} className="p-2 rounded-xl border border-border/50 bg-gradient-to-br from-card/50 to-accent/5 backdrop-blur-sm shadow-card hover:shadow-glow transition-all duration-300">
-                <div className="space-y-1.5">
+              <div key={symbol} className="p-1 rounded-xl border border-border/50 bg-white dark:bg-gradient-to-br from-card/50 to-accent/5 backdrop-blur-sm shadow-card hover:shadow-glow transition-all duration-300">
+                <div className="space-y-1">
                   {(msgs as any[]).slice(0, rowsPerSection).map((msg, idx) => {
                     const isRecent = Date.now() - msg._updated < 60 * 1000;
-                    const percentChange = msg.pct_vs_day_open;
-                    const lastClosePercent = msg.pct_vs_last_close;
-                    const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground";
-                    const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground";
-
+                    const percentChange = msg.pct_vs_day_open ?? 0;
+                    const lastClosePercent = msg.pct_vs_last_close ?? 0;
+                    const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground dark:text-white";
+                    const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground dark:text-white";
+                    const trendArrow = msg.direction === "🟢" ? (
+                      <TrendingUp className="h-5 w-5 text-success drop-shadow-glow" />
+                    ) : (
+                      <TrendingDown className="h-5 w-5 text-destructive drop-shadow-glow" />
+                    );
                     let bgClass = "";
                     let borderClass = "border-border/30";
 
@@ -317,34 +327,27 @@ export default function Stockfeed() {
                     const starStr = "⭐".repeat(stars);
 
                     return (
-                      <Card key={`${symbol}-${idx}`} className={`shadow-sm border ${borderClass} backdrop-blur-sm transition-all duration-300 hover:scale-[1.01] hover:shadow-glow ${bgClass} animate-fade-in`}>
-                        <div className="grid grid-cols-8 gap-2 px-3 py-1.5 items-center text-xs sm:text-sm"
+                      <Card
+                        key={`${symbol}-${idx}`}
+                        className={`shadow-sm border border-border/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow ${isDarkMode ? "dark:bg-gradient-to-br from-[#0b1e3b]/80 to-[#13294f]/80 text-white" : "bg-white text-black"}`}
+                      >
+                        <div className="grid grid-cols-8 gap-2 px-2 py-1 items-center text-xs sm:text-sm"
                           style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
                           <div className="flex justify-center text-lg">{starStr}</div>
-                          <div className="flex items-center">
-                            <Badge variant="outline" className="font-mono font-bold text-sm sm:text-base border-primary/50 bg-primary/5 px-3 py-1">
-                              {msg.symbol}
-                            </Badge>
+                          <div className="flex items-center font-mono font-bold">{msg.symbol ?? "-"}</div>
+                          <div className="text-center font-mono">{formatTime(msg.time ?? "")}</div>
+                          <div className="text-center font-mono font-semibold">{msg.day_open?.toFixed(3) ?? "-"}</div>
+                          <div className={`text-center font-mono font-bold text-base ${msg.price != null ? (msg.price > msg.day_open ? "text-success" : msg.price < msg.day_open ? "text-destructive" : "") : ""}`}>
+                            {msg.price?.toFixed(3) ?? "-"}
                           </div>
-                          <div className="text-center font-mono text-muted-foreground">{formatTime(msg.time)}</div>
-                          <div className="text-center font-mono font-semibold">{msg.day_open.toFixed(3)}</div>
-                          <div className={`text-center font-mono font-bold text-base ${msg.price > msg.day_open ? "text-success" : msg.price < msg.day_open ? "text-destructive" : ""}`}>
-                            {msg.price.toFixed(3)}
+                          <div className={`text-center font-semibold ${percentClass}`}>{percentChange != null ? percentChange.toFixed(2) + "%" : "-"}</div>
+                          <div className="flex justify-center items-center">
+                            {trendArrow}
                           </div>
-                          <div className={`text-center font-mono font-bold text-base ${percentClass}`}>
-                            {percentChange > 0 && "+"}{percentChange.toFixed(5)}%
-                          </div>
-                          <div className="flex justify-center">
-                            {msg.direction === "🟢" ?
-                              <TrendingUp className="h-5 w-5 text-success drop-shadow-glow" /> :
-                              <TrendingDown className="h-5 w-5 text-destructive drop-shadow-glow" />
-                            }
-                          </div>
-                          <div className={`text-center font-mono font-bold text-base ${lastCloseClass}`}>
-                            {lastClosePercent > 0 && "+"}{lastClosePercent.toFixed(5)}%
-                          </div>
+                          <div className={`text-center font-semibold ${lastCloseClass}`}>{lastClosePercent != null ? lastClosePercent.toFixed(2) + "%" : "-"}</div>
                         </div>
                       </Card>
+
                     );
                   })}
                 </div>
@@ -352,14 +355,6 @@ export default function Stockfeed() {
             );
           })}
         </div>
-
-        {messages.length === 0 && (
-          <Card className="shadow-glow border-border/50 backdrop-blur-sm bg-gradient-to-br from-card/50 to-accent/5 p-16 text-center animate-pulse-glow">
-            <p className="text-muted-foreground text-xl font-medium">
-              Waiting for live stock data...
-            </p>
-          </Card>
-        )}
       </div>
     </div>
   );
