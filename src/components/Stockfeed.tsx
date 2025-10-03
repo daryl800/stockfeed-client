@@ -209,11 +209,13 @@ export default function Stockfeed() {
                 onClick={() => setSoundsEnabled(false)}
                 variant="outline"
                 size="lg"
-                className={`border-destructive text-destructive hover:text-black hover:bg-destructive/10 transition-smooth ${!isDarkMode ? "hover:text-black" : ""
-                  }`}
+                className={`border-destructive text-destructive transition-smooth 
+    hover:bg-destructive/10 
+    ${isDarkMode ? "hover:text-white" : "hover:text-black"}`}
               >
                 <Volume2 className="mr-2 h-4 w-4" /> Disable Sounds
               </Button>
+
             )}
             <Button onClick={() => setIsDarkMode(!isDarkMode)} variant="outline" size="lg" className="transition-smooth hover:shadow-glow">
               {isDarkMode ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
