@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { TrendingUp, TrendingDown, Volume2, VolumeX, Sun, Moon, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 export default function Stockfeed() {
+  // --- State & refs ---
   const [messages, setMessages] = useState(() => {
     const saved = localStorage.getItem("stockfeed_messages");
     return saved ? JSON.parse(saved) : [];
@@ -15,17 +17,25 @@ export default function Stockfeed() {
   const [filterSymbols, setFilterSymbols] = useState<string[]>([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [rowsPerSection, setRowsPerSection] = useState(5);
-  const dropdownRef = useRef(null);
+  const toggleRef = useRef<HTMLDivElement | null>(null); // wrapper for the Filter button
+  const portalRef = useRef<HTMLDivElement | null>(null); // dropdown element in the portal
   const wsRef = useRef<WebSocket | null>(null);
   const connectedRef = useRef(false);
   const MAX_ENTRIES = 200;
 
-  const dingSound = useRef(new Audio(`${import.meta.env.BASE_URL}sounds/ding.mp3`)).current;
-  const dongSound = useRef(new Audio(`${import.meta.env.BASE_URL}sounds/dong.mp3`)).current;
+  // audio
+  const dingSound = useRef(new Audio(`${import.meta.env.BASE_URL}sounds/ding.mp3`)).current as HTMLAudioElement;
+  const dongSound = useRef(new Audio(`${import.meta.env.BASE_URL}sounds/dong.mp3`)).current as HTMLAudioElement;
 
   const [soundsEnabled, setSoundsEnabled] = useState(false);
   const soundsEnabledRef = useRef(soundsEnabled);
   useEffect(() => { soundsEnabledRef.current = soundsEnabled; }, [soundsEnabled]);
+
+  // Add ref for filterSymbols to avoid stale closure
+  const filterSymbolsRef = useRef(filterSymbols);
+  useEffect(() => {
+    filterSymbolsRef.current = filterSymbols;
+  }, [filterSymbols]);
 
   const [currentTime, setCurrentTime] = useState(() => {
     const now = new Date();
@@ -57,6 +67,7 @@ export default function Stockfeed() {
   const today = new Date().toISOString().slice(0, 10);
   const STOCK_WS_URL = "wss://memorykeeper.duckdns.org/ws/stockfeed";
 
+  // --- WebSocket connect ---
   useEffect(() => {
     if (connectedRef.current) return;
     connectedRef.current = true;
@@ -71,27 +82,30 @@ export default function Stockfeed() {
           const data = JSON.parse(event.data);
           data._updated = Date.now();
 
+          // --- Play sound only if symbol matches current filters ---
           if (soundsEnabledRef.current) {
-            if (data.pct_vs_last_close > 0) {
-              dingSound.currentTime = 0;
-              dingSound.play().catch(err => console.error(err));
-            } else if (data.pct_vs_last_close < 0) {
-              dongSound.currentTime = 0;
-              dongSound.play().catch(err => console.error(err));
+            // Use ref to get current filter symbols to avoid stale closure
+            const currentFilters = filterSymbolsRef.current;
+            if (currentFilters.length === 0 || currentFilters.includes(data.symbol)) {
+              if (data.pct_vs_last_close > 0) {
+                dingSound.currentTime = 0;
+                dingSound.play().catch(() => { });
+              } else if (data.pct_vs_last_close < 0) {
+                dongSound.currentTime = 0;
+                dongSound.play().catch(() => { });
+              }
             }
           }
 
+          // --- Save message as before ---
           setMessages(prev => {
             const newList = [data, ...prev].slice(0, MAX_ENTRIES);
             localStorage.setItem("stockfeed_messages", JSON.stringify(newList));
             return newList;
           });
-        } catch (err) { console.error(err); }
-      };
-
-      wsRef.current.onclose = () => {
-        console.log("WebSocket disconnected, reconnecting in 3s...");
-        setTimeout(connect, 3000);
+        } catch (err) {
+          console.error(err);
+        }
       };
 
       wsRef.current.onerror = (err) => {
@@ -109,6 +123,7 @@ export default function Stockfeed() {
     return () => clearInterval(interval);
   }, []);
 
+  // --- Data grouping / sorting ---
   const grouped = messages.reduce((acc: any, msg: any) => {
     if (!acc[msg.symbol]) acc[msg.symbol] = [];
     acc[msg.symbol].push(msg);
@@ -159,16 +174,6 @@ export default function Stockfeed() {
   const selectAllSymbols = () => setFilterSymbols(Object.keys(grouped));
   const deselectAllSymbols = () => setFilterSymbols([]);
 
-  const handleClickOutside = (event: MouseEvent) => {
-    if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-      setDropdownVisible(false);
-    }
-  };
-  useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleRowsPerSectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setRowsPerSection(Number(event.target.value));
   };
@@ -181,198 +186,199 @@ export default function Stockfeed() {
       return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
     });
 
+  // --- Dropdown portal positioning & behavior ---
+  const DROPDOWN_WIDTH = 224;
+  const DROPDOWN_MAX_HEIGHT = 320;
+  const [portalPos, setPortalPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const updatePortalPos = () => {
+    const el = toggleRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+
+    let left = rect.left;
+    let top = rect.bottom + 8; // below button by default
+
+    // horizontal collision
+    if (left + DROPDOWN_WIDTH > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - DROPDOWN_WIDTH - 8);
+    }
+
+    // vertical collision: if not enough space below, position above
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    if (spaceBelow < 120) {
+      top = rect.top - Math.min(DROPDOWN_MAX_HEIGHT, 200) - 8;
+      if (top < 8) top = 8;
+    }
+
+    setPortalPos({ top: Math.round(top + window.scrollY), left: Math.round(left + window.scrollX), width: DROPDOWN_WIDTH });
+  };
+
+  useLayoutEffect(() => {
+    if (dropdownVisible) updatePortalPos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dropdownVisible, Object.keys(grouped).length]);
+
+  useEffect(() => {
+    if (!dropdownVisible) return;
+
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (toggleRef.current?.contains(target)) return;
+      if (portalRef.current?.contains(target)) return;
+      setDropdownVisible(false);
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownVisible(false);
+    };
+
+    const onScrollOrResize = () => updatePortalPos();
+
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [dropdownVisible]);
+
+  // --- Render ---
   return (
     <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-white via-white to-accent/5 dark:from-background dark:via-background dark:to-accent/5 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 p-6 bg-white dark:bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 shadow-card">
           <div>
-            <h1 className="text-4xl sm:text-6xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-pulse-glow mb-2">
-              STOCKFEED
-            </h1>
+            <h1 className="text-4xl sm:text-6xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-pulse-glow mb-2">STOCKFEED</h1>
             <p className="flex items-center gap-3 text-muted-foreground dark:text-white">
               <span className="text-base sm:text-lg font-medium">{today}</span>
               <span className="text-primary font-mono text-lg sm:text-2xl font-semibold tracking-wider">{currentTime}</span>
             </p>
           </div>
+
           <div className="flex flex-wrap gap-3">
-            <Button onClick={clearMessages} variant="secondary" size="lg" className="transition-smooth hover:shadow-glow">
-              Clear All
-            </Button>
+            <Button onClick={clearMessages} variant="secondary" size="lg" className="transition-smooth hover:shadow-glow">Clear All</Button>
+
             {!soundsEnabled ? (
               <Button onClick={handleEnableSounds} size="lg" className="gradient-primary transition-smooth hover:shadow-glow">
                 <VolumeX className="mr-2 h-4 w-4" /> Enable Sounds
               </Button>
             ) : (
-              <Button
-                onClick={() => setSoundsEnabled(false)}
-                variant="outline"
-                size="lg"
-                className={`border-destructive text-destructive transition-smooth 
-                hover:bg-destructive/10 
-                ${isDarkMode ? "hover:text-white" : "hover:text-black"}`}
-              >
+              <Button onClick={() => setSoundsEnabled(false)} variant="outline" size="lg" className={`border-destructive text-destructive transition-smooth hover:bg-destructive/10 ${isDarkMode ? "hover:text-white" : "hover:text-black"}`}>
                 <Volume2 className="mr-2 h-4 w-4" /> Disable Sounds
               </Button>
             )}
+
             <Button onClick={() => setIsDarkMode(!isDarkMode)} variant="outline" size="lg" className="transition-smooth hover:shadow-glow">
-              {isDarkMode ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
-              {isDarkMode ? "Light" : "Dark"}
+              {isDarkMode ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />} {isDarkMode ? "Light" : "Dark"}
             </Button>
           </div>
         </div>
 
         {/* Filter & Rows */}
         <div className="flex flex-wrap gap-3 mb-6 items-center p-4 bg-white dark:bg-card/30 backdrop-blur-sm rounded-xl border border-border/50">
-          <div className="relative" ref={dropdownRef}>
-            <Button onClick={() => setDropdownVisible(!dropdownVisible)} size="lg" className="flex items-center gap-2" variant="outline">
+          <div className="relative" ref={toggleRef}>
+            <Button onClick={() => setDropdownVisible(v => !v)} size="lg" className="flex items-center gap-2" variant="outline">
               <Filter className="h-4 w-4" /> Filter Symbols
             </Button>
-            {dropdownVisible && (
-              <div className="absolute z-50 right-0 mt-2 bg-white dark:bg-card border border-border rounded-lg p-3 w-52 max-h-64 overflow-y-auto shadow-glow">
-                {Object.keys(grouped).map(symbol => (
-                  <label key={symbol} className="flex items-center hover:bg-accent/20 p-2 rounded cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={filterSymbols.includes(symbol)}
-                      onChange={() => toggleSymbolSelection(symbol)}
-                      className="mr-3 h-4 w-4 rounded border-border accent-primary"
-                    />
-                    <span className="font-mono font-semibold dark:text-white">{symbol}</span>
-                  </label>
-                ))}
-              </div>
-            )}
           </div>
+
           <Button onClick={selectAllSymbols} variant="outline" size="lg">Select All</Button>
           <Button onClick={deselectAllSymbols} variant="outline" size="lg">Deselect All</Button>
+
           <div className="flex items-center gap-3 ml-auto">
             <span className="text-sm font-medium text-black dark:text-white">Rows per symbol:</span>
-            <select
-              value={rowsPerSection}
-              onChange={handleRowsPerSectionChange}
-              className={`p-2 px-3 border border-border rounded-lg bg-card text-foreground font-medium focus:ring-2 focus:ring-primary focus:border-primary transition-all ${isDarkMode ? "text-white" : "text-black"}`}
-            >
+            <select value={rowsPerSection} onChange={handleRowsPerSectionChange} className={`p-2 px-3 border border-border rounded-lg bg-card text-foreground font-medium focus:ring-2 focus:ring-primary focus:border-primary transition-all ${isDarkMode ? "text-white" : "text-black"}`}>
               {[...Array(10).keys()].map(i => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
             </select>
           </div>
+
+          {/* Portal dropdown */}
+          {dropdownVisible && portalPos && createPortal(
+            <div
+              ref={portalRef}
+              className="bg-white text-black dark:bg-card dark:text-white border border-border rounded-lg shadow-xl p-3 max-h-80 overflow-y-auto"
+              style={{ position: 'fixed', top: portalPos.top, left: portalPos.left, width: portalPos.width, zIndex: 9999 }}
+            >
+              {Object.keys(grouped).length === 0 ? (
+                <div className="text-sm text-muted-foreground">No symbols</div>
+              ) : (
+                Object.keys(grouped).map(symbol => (
+                  <label key={symbol} className="flex items-center hover:bg-accent/20 p-2 rounded cursor-pointer transition-colors">
+                    <input type="checkbox" checked={filterSymbols.includes(symbol)} onChange={() => toggleSymbolSelection(symbol)} className="mr-3 h-4 w-4 rounded border-border accent-primary" />
+                    <span className="font-mono font-semibold dark:text-white">{symbol}</span>
+                  </label>
+                ))
+              )}
+            </div>,
+            document.body
+          )}
         </div>
 
         {/* Grid Header */}
         <Card className="mb-4 shadow-glow border-border/50 backdrop-blur-sm bg-white dark:bg-gradient-to-r from-card/80 to-accent/30">
-          <div className="grid grid-cols-8 gap-2 px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wide text-muted-foreground dark:text-white"
-            style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
-            <button
-              onClick={() => handleSort('stars')}
-              className={`text-center hover:text-primary hover:scale-110 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'stars' ? 'text-primary scale-110' : ''}`}
-            >
+          <div className="grid grid-cols-8 gap-2 px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wide text-muted-foreground dark:text-white" style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
+            <button onClick={() => handleSort('stars')} className={`text-center hover:text-primary hover:scale-110 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'stars' ? 'text-primary scale-110' : ''}`}>
               ⭐ {sortColumn === 'stars' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
             <div className="font-extrabold">Symbol</div>
             <div className="text-center">Time</div>
             <div className="text-center">Day Open</div>
             <div className="text-center">Current</div>
-            <button
-              onClick={() => handleSort('vsOpen')}
-              className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsOpen' ? 'text-primary scale-105' : ''}`}
-            >
-              vs Open {sortColumn === 'vsOpen' && (sortDirection === 'desc' ? '↓' : '↑')}
-            </button>
-            <button
-              onClick={() => handleSort('trend')}
-              className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'trend' ? 'text-primary scale-105' : ''}`}
-            >
-              Trend {sortColumn === 'trend' && (sortDirection === 'desc' ? '↓' : '↑')}
-            </button>
-            <button
-              onClick={() => handleSort('vsClose')}
-              className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsClose' ? 'text-primary scale-105' : ''}`}
-            >
-              vs Last {sortColumn === 'vsClose' && (sortDirection === 'desc' ? '↓' : '↑')}
-            </button>
+            <button onClick={() => handleSort('vsOpen')} className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsOpen' ? 'text-primary scale-105' : ''}`}>vs Open {sortColumn === 'vsOpen' && (sortDirection === 'desc' ? '↓' : '↑')}</button>
+            <button onClick={() => handleSort('trend')} className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'trend' ? 'text-primary scale-105' : ''}`}>Trend {sortColumn === 'trend' && (sortDirection === 'desc' ? '↓' : '↑')}</button>
+            <button onClick={() => handleSort('vsClose')} className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'vsClose' ? 'text-primary scale-105' : ''}`}>vs Last {sortColumn === 'vsClose' && (sortDirection === 'desc' ? '↓' : '↑')}</button>
           </div>
         </Card>
 
         {/* Stock Rows */}
         <div className="space-y-2">
-          {sortedSymbols.map(([symbol, msgs], sectionIdx) => {
-            return (
-              <div key={symbol} className="p-1 rounded-xl border border-border/50 bg-white dark:bg-gradient-to-br from-card/50 to-accent/5 backdrop-blur-sm shadow-card hover:shadow-glow transition-all duration-300">
-                <div className="space-y-1">
-                  {(msgs as any[]).slice(0, rowsPerSection).map((msg, idx) => {
-                    const isRecent = Date.now() - msg._updated < 60 * 1000;
-                    const percentChange = msg.pct_vs_day_open ?? 0;
-                    const lastClosePercent = msg.pct_vs_last_close ?? 0;
-                    const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground dark:text-white";
-                    const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground dark:text-white";
-                    const trendArrow = msg.direction === "🟢" ? (
-                      <TrendingUp className="h-5 w-5 text-success drop-shadow-glow" />
-                    ) : (
-                      <TrendingDown className="h-5 w-5 text-destructive drop-shadow-glow" />
-                    );
+          {sortedSymbols.map(([symbol, msgs]: any) => (
+            <div key={symbol} className="p-1 rounded-xl border border-border/50 bg-white dark:bg-gradient-to-br from-card/50 to-accent/5 backdrop-blur-sm shadow-card hover:shadow-glow transition-all duration-300">
+              <div className="space-y-1">
+                {(msgs as any[]).slice(0, rowsPerSection).map((msg: any, idx: number) => {
+                  const isRecent = Date.now() - msg._updated < 60 * 1000;
+                  const percentChange = msg.pct_vs_day_open ?? 0;
+                  const lastClosePercent = msg.pct_vs_last_close ?? 0;
+                  const percentClass = percentChange > 0 ? "text-success" : percentChange < 0 ? "text-destructive" : "text-muted-foreground dark:text-white";
+                  const lastCloseClass = lastClosePercent > 0 ? "text-success" : lastClosePercent < 0 ? "text-destructive" : "text-muted-foreground dark:text-white";
+                  const trendArrow = msg.direction === "🟢" ? <TrendingUp className="h-5 w-5 text-success drop-shadow-glow" /> : <TrendingDown className="h-5 w-5 text-destructive drop-shadow-glow" />;
 
-                    // ✅ Highlight recent changes
-                    let bgClass = "";
-                    if (isRecent) {
-                      if (lastClosePercent > 0) bgClass = "bg-success/10 dark:bg-success/5";
-                      else if (lastClosePercent < 0) bgClass = "bg-destructive/10 dark:bg-destructive/5";
-                    }
+                  let bgClass = "";
+                  if (isRecent) {
+                    if (lastClosePercent > 0) bgClass = "bg-success/10 dark:bg-success/5";
+                    else if (lastClosePercent < 0) bgClass = "bg-destructive/10 dark:bg-destructive/5";
+                  }
 
-                    const stars = calculateStars(msg);
-                    const starStr = "⭐".repeat(stars);
+                  const stars = calculateStars(msg);
+                  const starStr = "⭐".repeat(stars);
 
-                    return (
-                      <Card
-                        key={`${symbol}-${idx}`}
-                        className={`shadow-sm border border-border/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow
-    ${bgClass} 
-    ${!bgClass && isDarkMode ? "dark:bg-gradient-to-br from-[#0b1e3b]/80 to-[#13294f]/80 text-white" : ""}
-    ${!bgClass && !isDarkMode ? "bg-white text-black" : ""}`}
-                      >
-                        <div className="grid grid-cols-8 gap-2 px-2 py-1 items-center text-xs sm:text-sm"
-                          style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
-                          <div className="flex justify-center text-lg">{starStr}</div>
-                          <div className={`flex items-center font-mono font-bold ${!isDarkMode && isRecent ? "text-black" : ""
-                            }`}>
-                            {msg.symbol ?? "-"}
-                          </div>
-                          <div className={`text-center font-mono ${!isDarkMode && isRecent ? "text-black" : ""
-                            }`}>
-                            {formatTime(msg.time ?? "")}
-                          </div>
-
-                          <div className={`text-center font-mono font-semibold ${!isDarkMode && isRecent ? "text-black" : ""
-                            }`}>
-                            {msg.day_open?.toFixed(3) ?? "-"}
-                          </div>
-
-                          <div className={`text-center font-mono font-bold ${msg.price != null
-                            ? msg.price > msg.day_open
-                              ? "text-success"
-                              : msg.price < msg.day_open
-                                ? "text-destructive"
-                                : ""
-                            : ""
-                            }`}>
-                            {msg.price?.toFixed(3) ?? "-"}
-                          </div>
-                          <div className={`text-center font-semibold ${percentClass}`}>{percentChange != null ? percentChange.toFixed(2) + "%" : "-"}</div>
-                          <div className="flex justify-center items-center">{trendArrow}</div>
-                          <div className={`text-center font-semibold ${lastCloseClass}`}>{lastClosePercent != null ? lastClosePercent.toFixed(2) + "%" : "-"}</div>
-                        </div>
-                      </Card>
-
-
-
-
-
-                    );
-                  })}
-                </div>
+                  return (
+                    <Card key={`${symbol}-${idx}`} className={`shadow-sm border border-border/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow ${bgClass} ${!bgClass && isDarkMode ? "dark:bg-gradient-to-br from-[#0b1e3b]/80 to-[#13294f]/80 text-white" : ""} ${!bgClass && !isDarkMode ? "bg-white text-black" : ""}`}>
+                      <div className="grid grid-cols-8 gap-2 px-2 py-1 items-center text-xs sm:text-sm" style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
+                        <div className="flex justify-center text-lg">{starStr}</div>
+                        <div className={`flex items-center font-mono font-bold ${!isDarkMode && isRecent ? "text-black" : ""}`}>{msg.symbol ?? "-"}</div>
+                        <div className={`text-center font-mono ${!isDarkMode && isRecent ? "text-black" : ""}`}>{formatTime(msg.time ?? "")}</div>
+                        <div className={`text-center font-mono font-semibold ${!isDarkMode && isRecent ? "text-black" : ""}`}>{msg.day_open?.toFixed(3) ?? "-"}</div>
+                        <div className={`text-center font-mono font-bold ${msg.price != null ? (msg.price > msg.day_open ? "text-success" : msg.price < msg.day_open ? "text-destructive" : "") : ""}`}>{msg.price?.toFixed(3) ?? "-"}</div>
+                        <div className={`text-center font-semibold ${percentClass}`}>{percentChange != null ? percentChange.toFixed(2) + "%" : "-"}</div>
+                        <div className="flex justify-center items-center">{trendArrow}</div>
+                        <div className={`text-center font-semibold ${lastCloseClass}`}>{lastClosePercent != null ? lastClosePercent.toFixed(2) + "%" : "-"}</div>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
+
       </div>
     </div>
   );
