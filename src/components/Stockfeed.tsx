@@ -353,11 +353,11 @@ export default function Stockfeed() {
 
         {/* Grid Header - Changed to light grey (gray-300) */}
         <Card className="mb-2 shadow-glow border-border/50 backdrop-blur-sm bg-gray-300 text-gray-800">
-          <div className="grid grid-cols-8 gap-1 px-2 py-2 text-xs sm:text-sm font-bold uppercase tracking-wide" style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
+          <div className="grid grid-cols-8 gap-1 px-2 py-2 text-xs sm:text-sm font-bold uppercase tracking-wide" style={{ gridTemplateColumns: '60px auto repeat(4, minmax(70px, 1fr)) auto minmax(70px, 1fr)' }}>
             <button onClick={() => handleSort('stars')} className={`text-center hover:text-primary hover:scale-110 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'stars' ? 'text-primary scale-110' : ''}`}>
               ⭐ {sortColumn === 'stars' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
-            <div className="font-extrabold">Symbol</div>
+            <div className="font-extrabold">Sym</div>
             <button onClick={() => handleSort('time')} className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'time' ? 'text-primary scale-105' : ''}`}>
               Time {sortColumn === 'time' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
@@ -393,7 +393,7 @@ export default function Stockfeed() {
 
                   return (
                     <Card key={`${symbol}-${idx}`} className={`shadow-sm border border-border/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow rounded-${GAP_CONSTANTS.BORDER_RADIUS} ${bgClass} ${!bgClass && isDarkMode ? "dark:bg-gradient-to-br from-[#0b1e3b]/80 to-[#13294f]/80 text-white" : ""} ${!bgClass && !isDarkMode ? "bg-white text-black" : ""}`}>
-                      <div className={`grid grid-cols-8 gap-${GAP_CONSTANTS.GRID_GAP} px-${GAP_CONSTANTS.PADDING_X} py-${GAP_CONSTANTS.PADDING_Y} items-center text-xs sm:text-sm`} style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
+                      <div className={`grid grid-cols-8 gap-${GAP_CONSTANTS.GRID_GAP} px-${GAP_CONSTANTS.PADDING_X} py-${GAP_CONSTANTS.PADDING_Y} items-center text-xs sm:text-sm`} style={{ gridTemplateColumns: '60px auto repeat(4, minmax(70px, 1fr)) auto minmax(70px, 1fr)' }}>
                         <div className="flex justify-center text-lg">{starStr}</div>
                         <div className={`flex items-center font-mono font-bold ${!isDarkMode && isRecent ? "text-black" : ""}`}>{msg.symbol ?? "-"}</div>
                         <div className={`text-center font-mono text-xs ${!isDarkMode && isRecent ? "text-black" : ""}`}>{formatTime(msg.time ?? "")}</div>
