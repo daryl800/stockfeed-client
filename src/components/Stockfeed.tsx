@@ -279,10 +279,10 @@ export default function Stockfeed() {
 
   // --- Render ---
   return (
-    <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-white via-white to-accent/5 dark:from-background dark:via-background dark:to-accent/5 transition-colors duration-300">
+    <div className="min-h-screen p-2 sm:p-4 bg-gradient-to-br from-white via-white to-accent/5 dark:from-background dark:via-background dark:to-accent/5 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         {/* Header - Completely restructured */}
-        <div className="mb-6 flex flex-col gap-4 p-4 bg-white dark:bg-card/50 backdrop-blur-sm rounded-xl border border-gray-600 dark:border-gray-300 shadow-card">
+        <div className="mb-4 flex flex-col gap-4 p-4 bg-white dark:bg-card/50 backdrop-blur-sm rounded-xl border border-gray-600 dark:border-gray-300 shadow-card">
           {/* Top row with STOCKFEED and Time on right */}
           <div className="flex justify-between items-center">
             <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-pulse-glow">STOCKFEED</h1>
@@ -315,7 +315,7 @@ export default function Stockfeed() {
         </div>
 
         {/* Filter & Rows - All buttons with gradient-primary class */}
-        <div className="flex flex-wrap gap-2 mb-4 items-center p-3 bg-white dark:bg-card/30 backdrop-blur-sm rounded-lg border border-gray-600 dark:border-gray-300">
+        <div className="flex flex-wrap gap-2 mb-2 items-center p-3 bg-white dark:bg-card/30 backdrop-blur-sm rounded-lg border border-gray-600 dark:border-gray-300">
           <div className="relative" ref={toggleRef}>
             <Button onClick={() => setDropdownVisible(v => !v)} size="sm" className="flex items-center gap-1 gradient-primary text-white">
               <Filter className="h-3 w-3" /> Filter Symbols
@@ -354,7 +354,7 @@ export default function Stockfeed() {
         </div>
 
         {/* Grid Header - Changed to light grey (gray-300) */}
-        <Card className="mb-3 shadow-glow border-border/50 backdrop-blur-sm bg-gray-300 text-gray-800">
+        <Card className="mb-2 shadow-glow border-border/50 backdrop-blur-sm bg-gray-300 text-gray-800">
           <div className="grid grid-cols-8 gap-1 px-2 py-2 text-xs sm:text-sm font-bold uppercase tracking-wide" style={{ gridTemplateColumns: '60px repeat(7, minmax(0, 1fr))' }}>
             <button onClick={() => handleSort('stars')} className={`text-center hover:text-primary hover:scale-110 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'stars' ? 'text-primary scale-110' : ''}`}>
               ⭐ {sortColumn === 'stars' && (sortDirection === 'desc' ? '↓' : '↑')}
