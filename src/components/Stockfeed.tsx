@@ -199,7 +199,6 @@ export default function Stockfeed() {
   const toggleSymbolSelection = (symbol: string) => {
     setFilterSymbols(prev => prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol]);
   };
-  const selectAllSymbols = () => setFilterSymbols(Object.keys(grouped));
 
   const handleRowsPerSectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setRowsPerSection(Number(event.target.value));
@@ -291,38 +290,37 @@ export default function Stockfeed() {
               <span className="text-primary font-mono text-base sm:text-xl font-semibold tracking-wider">{currentTime}</span>
             </div>
           </div>
-
-          {/* Buttons row - all buttons under STOCKFEED, all with gradient-primary class */}
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={clearMessages} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
-              Clear All
-            </Button>
-
-            {!soundsEnabled ? (
-              <Button onClick={handleEnableSounds} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
-                <VolumeX className="mr-1 h-3 w-3" /> Enable Sounds
-              </Button>
-            ) : (
-              <Button onClick={() => setSoundsEnabled(false)} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
-                <Volume2 className="mr-1 h-3 w-3" /> Disable Sounds
-              </Button>
-            )}
-
-            <Button onClick={() => setIsDarkMode(!isDarkMode)} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
-              {isDarkMode ? <Sun className="h-3 w-3 mr-1" /> : <Moon className="h-3 w-3 mr-1" />} {isDarkMode ? "Light" : "Dark"}
-            </Button>
-          </div>
         </div>
 
-        {/* Filter & Rows - All buttons with gradient-primary class */}
+        {/* Filter & Rows - All buttons moved here in specified order */}
         <div className="flex flex-wrap gap-2 mb-2 items-center p-3 bg-white dark:bg-card/30 backdrop-blur-sm rounded-lg border border-gray-600 dark:border-gray-300">
+          {/* (1) Mode */}
+          <Button onClick={() => setIsDarkMode(!isDarkMode)} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
+            {isDarkMode ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
+          </Button>
+
+          {/* (2) Sounds - just icon */}
+          {!soundsEnabled ? (
+            <Button onClick={handleEnableSounds} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
+              <VolumeX className="h-3 w-3" />
+            </Button>
+          ) : (
+            <Button onClick={() => setSoundsEnabled(false)} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
+              <Volume2 className="h-3 w-3" />
+            </Button>
+          )}
+
+          {/* (3) Filter */}
           <div className="relative" ref={toggleRef}>
             <Button onClick={() => setDropdownVisible(v => !v)} size="sm" className="flex items-center gap-1 gradient-primary text-white">
-              <Filter className="h-3 w-3" /> Filter Symbols
+              <Filter className="h-3 w-3" />
             </Button>
           </div>
 
-          <Button onClick={selectAllSymbols} size="sm" className="gradient-primary text-white">Select All</Button>
+          {/* (4) Clear */}
+          <Button onClick={clearMessages} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
+            Clear
+          </Button>
 
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs font-medium text-black dark:text-white">Rows per symbol:</span>
