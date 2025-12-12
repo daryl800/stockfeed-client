@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { TrendingUp, TrendingDown, Volume2, VolumeX, Sun, Moon, Filter } from "lucide-react";
+import { TrendingUp, TrendingDown, Volume2, VolumeX, Sun, Moon, Filter, Wifi, WifiOff, Power, PowerOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -43,6 +43,10 @@ export default function Stockfeed() {
   const portalRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const connectedRef = useRef(false);
+
+  // Add WebSocket connection state
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // audio
   const dingSound = useRef(new Audio(`${import.meta.env.BASE_URL}sounds/ding.mp3`)).current as HTMLAudioElement;
@@ -89,15 +93,24 @@ export default function Stockfeed() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // --- WebSocket connect ---
-  useEffect(() => {
-    if (connectedRef.current) return;
-    connectedRef.current = true;
+  // WebSocket connection function
+  const connectWebSocket = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log("WebSocket already connected");
+      return;
+    }
 
-    function connect() {
+    setConnectionError(null);
+    setIsConnected(false);
+
+    try {
       wsRef.current = new WebSocket(STOCK_WS_URL);
 
-      wsRef.current.onopen = () => console.log("WebSocket connected:", STOCK_WS_URL);
+      wsRef.current.onopen = () => {
+        console.log("WebSocket connected:", STOCK_WS_URL);
+        setIsConnected(true);
+        connectedRef.current = true;
+      };
 
       wsRef.current.onmessage = (event) => {
         try {
@@ -131,13 +144,47 @@ export default function Stockfeed() {
       };
 
       wsRef.current.onerror = (err) => {
-        console.error(err);
-        wsRef.current?.close();
+        console.error("WebSocket error:", err);
+        setConnectionError("Connection error");
+        setIsConnected(false);
       };
-    }
 
-    connect();
-    return () => wsRef.current?.close();
+      wsRef.current.onclose = (event) => {
+        console.log("WebSocket closed:", event.code, event.reason);
+        setIsConnected(false);
+        connectedRef.current = false;
+
+        // Auto-reconnect after 3 seconds if not manually disconnected
+        if (event.code !== 1000) { // 1000 = normal closure
+          setTimeout(() => {
+            connectWebSocket();
+          }, 3000);
+        }
+      };
+    } catch (err) {
+      console.error("Failed to create WebSocket:", err);
+      setConnectionError("Failed to connect");
+      setIsConnected(false);
+    }
+  };
+
+  const disconnectWebSocket = () => {
+    if (wsRef.current) {
+      wsRef.current.close(1000, "User disconnected");
+      setIsConnected(false);
+      connectedRef.current = false;
+    }
+  };
+
+  // --- WebSocket connect ---
+  useEffect(() => {
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close(1000, "Component unmounted");
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -318,9 +365,40 @@ export default function Stockfeed() {
           </div>
 
           {/* (4) Clear */}
-          <Button onClick={clearMessages} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
+          {/* <Button onClick={clearMessages} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
             Clear
           </Button>
+          import {Brush} from "lucide-react"; // Add to imports */}
+
+          <Button
+            onClick={clearMessages}
+            size="sm"
+            className="gradient-primary transition-smooth hover:shadow-glow text-white"
+            title="Clear all messages"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+
+          {/* (5) WebSocket Connection Status Button */}
+          {!isConnected ? (
+            <Button
+              onClick={connectWebSocket}
+              size="sm"
+              className="bg-red-500 hover:bg-red-600 transition-smooth hover:shadow-glow text-white"
+              title={connectionError || "Disconnected - Click to connect"}
+            >
+              <WifiOff className="h-3 w-3" />
+            </Button>
+          ) : (
+            <Button
+              onClick={disconnectWebSocket}
+              size="sm"
+              className="bg-green-500 hover:bg-green-600 transition-smooth hover:shadow-glow text-white"
+              title="Connected - Click to disconnect"
+            >
+              <Wifi className="h-3 w-3" />
+            </Button>
+          )}
 
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs font-medium text-black dark:text-white">Rows per symbol:</span>
