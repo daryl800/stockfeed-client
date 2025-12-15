@@ -331,7 +331,31 @@ export default function Stockfeed() {
         <div className="mb-4 flex flex-col gap-4 p-4 bg-white dark:bg-card/50 backdrop-blur-sm rounded-xl border border-gray-600 dark:border-gray-300 shadow-card">
           {/* Top row with STOCKFEED and Time on right */}
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-pulse-glow">STOCKFEED</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-pulse-glow">STOCKFEED</h1>
+
+              {/* (5) WebSocket Connection Status Button - now right next to STOCKFEED */}
+              {!isConnected ? (
+                <Button
+                  onClick={connectWebSocket}
+                  size="sm"
+                  className="bg-red-500 hover:bg-red-600 transition-smooth hover:shadow-glow text-white"
+                  title={connectionError || "Disconnected - Click to connect"}
+                >
+                  <WifiOff className="h-3 w-3" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={disconnectWebSocket}
+                  size="sm"
+                  className="bg-green-500 hover:bg-green-600 transition-smooth hover:shadow-glow text-white"
+                  title="Connected - Click to disconnect"
+                >
+                  <Wifi className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-muted-foreground dark:text-white">{today}</span>
               <span className="text-primary font-mono text-base sm:text-xl font-semibold tracking-wider">{currentTime}</span>
@@ -378,27 +402,6 @@ export default function Stockfeed() {
           >
             <Trash2 className="h-3 w-3" />
           </Button>
-
-          {/* (5) WebSocket Connection Status Button */}
-          {!isConnected ? (
-            <Button
-              onClick={connectWebSocket}
-              size="sm"
-              className="bg-red-500 hover:bg-red-600 transition-smooth hover:shadow-glow text-white"
-              title={connectionError || "Disconnected - Click to connect"}
-            >
-              <WifiOff className="h-3 w-3" />
-            </Button>
-          ) : (
-            <Button
-              onClick={disconnectWebSocket}
-              size="sm"
-              className="bg-green-500 hover:bg-green-600 transition-smooth hover:shadow-glow text-white"
-              title="Connected - Click to disconnect"
-            >
-              <Wifi className="h-3 w-3" />
-            </Button>
-          )}
 
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs font-medium text-black dark:text-white">Rows per symbol:</span>
