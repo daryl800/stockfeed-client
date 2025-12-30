@@ -29,6 +29,7 @@ type SortColumn = 'stars' | 'vsOpen' | 'trend' | 'vsClose' | 'time';
 export default function Stockfeed() {
   // --- State & refs ---
   const [messages, setMessages] = useState(() => {
+    if (typeof window === "undefined") return [];
     const saved = localStorage.getItem("stockfeed_messages");
     return saved ? JSON.parse(saved) : [];
   });
@@ -38,7 +39,14 @@ export default function Stockfeed() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [filterSymbols, setFilterSymbols] = useState<string[]>([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [rowsPerSection, setRowsPerSection] = useState(DEFAULT_ROWS_PER_SECTION);
+
+  // rowsPerSection 帶 localStorage 初始化
+  const [rowsPerSection, setRowsPerSection] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_ROWS_PER_SECTION;
+    const saved = localStorage.getItem("stockfeed_rows_per_section");
+    return saved ? Number(saved) : DEFAULT_ROWS_PER_SECTION;
+  });
+
   const toggleRef = useRef<HTMLDivElement | null>(null);
   const portalRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -237,6 +245,7 @@ export default function Stockfeed() {
     localStorage.removeItem("stockfeed_messages");
   };
 
+
   const handleEnableSounds = () => {
     dingSound.play().then(() => { dingSound.pause(); dingSound.currentTime = 0; }).catch(() => { });
     dongSound.play().then(() => { dongSound.pause(); dongSound.currentTime = 0; }).catch(() => { });
@@ -247,8 +256,13 @@ export default function Stockfeed() {
     setFilterSymbols(prev => prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol]);
   };
 
+  // rowsPerSection 變更時，同步寫回 localStorage
   const handleRowsPerSectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setRowsPerSection(Number(event.target.value));
+    const value = Number(event.target.value);
+    setRowsPerSection(value);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("stockfeed_rows_per_section", String(value));
+    }
   };
 
   const sortedSymbols = Object.entries(grouped)
@@ -389,11 +403,6 @@ export default function Stockfeed() {
           </div>
 
           {/* (4) Clear */}
-          {/* <Button onClick={clearMessages} size="sm" className="gradient-primary transition-smooth hover:shadow-glow text-white">
-            Clear
-          </Button>
-          import {Brush} from "lucide-react"; // Add to imports */}
-
           <Button
             onClick={clearMessages}
             size="sm"
@@ -405,7 +414,11 @@ export default function Stockfeed() {
 
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs font-medium text-black dark:text-white">Rows per symbol:</span>
-            <select value={rowsPerSection} onChange={handleRowsPerSectionChange} className={`p-1 px-2 border border-border rounded-md bg-card text-foreground font-medium focus:ring-1 focus:ring-primary focus:border-primary transition-all text-sm ${isDarkMode ? "text-white" : "text-black"}`}>
+            <select
+              value={rowsPerSection}
+              onChange={handleRowsPerSectionChange}
+              className={`p-1 px-2 border border-border rounded-md bg-card text-foreground font-medium focus:ring-1 focus:ring-primary focus:border-primary transition-all text-sm ${isDarkMode ? "text-white" : "text-black"}`}
+            >
               {[...Array(10).keys()].map(i => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
             </select>
           </div>
@@ -438,7 +451,8 @@ export default function Stockfeed() {
             <button onClick={() => handleSort('stars')} className={`text-center hover:text-primary hover:scale-110 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'stars' ? 'text-primary scale-110' : ''}`}>
               ⭐ {sortColumn === 'stars' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
-            <div className="font-extrabold">Sym</div>
+            {/* 這裡從 Sym 改成 Stock */}
+            <div className="font-extrabold">Stock</div>
             <button onClick={() => handleSort('time')} className={`text-center hover:text-primary hover:scale-105 transition-all cursor-pointer flex items-center justify-center gap-1 ${sortColumn === 'time' ? 'text-primary scale-105' : ''}`}>
               Time {sortColumn === 'time' && (sortDirection === 'desc' ? '↓' : '↑')}
             </button>
@@ -491,7 +505,6 @@ export default function Stockfeed() {
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );
